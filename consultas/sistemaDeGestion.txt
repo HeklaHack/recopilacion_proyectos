@@ -1,0 +1,69 @@
+-- Proyecto: Sistema de Gestión de Cursos
+DROP TABLE IF EXISTS Inscripciones;
+DROP TABLE IF EXISTS Estudiantes;
+DROP TABLE IF EXISTS Cursos;
+DROP TABLE IF EXISTS Instructores;
+
+CREATE TABLE Instructores (
+  InstructorID INT PRIMARY KEY,
+  Nombre VARCHAR(100) NOT NULL,
+  Apellido VARCHAR(100) NOT NULL,
+  Email VARCHAR(100) UNIQUE NOT NULL,
+  Telefono VARCHAR(20)
+);
+
+CREATE TABLE Cursos (
+  CursoID INT PRIMARY KEY,
+  Titulo VARCHAR(150) NOT NULL,
+  Descripcion TEXT,
+  Duracion INT,
+  InstructorID INT,
+  FOREIGN KEY (InstructorID) REFERENCES Instructores(InstructorID)
+);
+
+CREATE TABLE Estudiantes (
+  EstudianteID INT PRIMARY KEY,
+  Nombre VARCHAR(100) NOT NULL,
+  Apellido VARCHAR(100) NOT NULL,
+  Email VARCHAR(100) UNIQUE NOT NULL,
+  FechaRegistro DATE DEFAULT CURRENT_DATE
+);
+
+CREATE TABLE Inscripciones (
+  InscripcionID INT PRIMARY KEY,
+  EstudianteID INT,
+  CursoID INT,
+  FechaInscripcion DATE DEFAULT CURRENT_DATE,
+  Estado VARCHAR(20) DEFAULT 'Activo',
+  FOREIGN KEY (EstudianteID) REFERENCES Estudiantes(EstudianteID),
+  FOREIGN KEY (CursoID) REFERENCES Cursos(CursoID)
+);
+
+INSERT INTO Instructores (InstructorID, Nombre, Apellido, Email, Telefono) VALUES (1, 'Carlos', 'Lopez', 'carlos.lopez@example.com', '5551234');
+INSERT INTO Instructores (InstructorID, Nombre, Apellido, Email, Telefono) VALUES (2, 'Ana', 'Martinez', 'ana.martinez@example.com', '5555678');
+
+INSERT INTO Cursos (CursoID, Titulo, Descripcion, Duracion, InstructorID) VALUES (101, 'Introducción a SQL', 'Curso básico de SQL', 40, 1);
+INSERT INTO Cursos (CursoID, Titulo, Descripcion, Duracion, InstructorID) VALUES (102, 'Programación en Python', 'Curso intermedio de Python', 60, 2);
+
+INSERT INTO Estudiantes (EstudianteID, Nombre, Apellido, Email, FechaRegistro) VALUES (1001, 'Luis', 'Garcia', 'luis.garcia@example.com', '2025-01-15');
+INSERT INTO Estudiantes (EstudianteID, Nombre, Apellido, Email, FechaRegistro) VALUES (1002, 'Marta', 'Fernandez', 'marta.fernandez@example.com', '2025-02-10');
+INSERT INTO Estudiantes (EstudianteID, Nombre, Apellido, Email, FechaRegistro) VALUES (1003, 'Jose', 'Rodriguez', 'jose.rodriguez@example.com', '2025-03-05');
+
+INSERT INTO Inscripciones (InscripcionID, EstudianteID, CursoID, FechaInscripcion, Estado) VALUES (5001, 1001, 101, '2025-03-10', 'Activo');
+INSERT INTO Inscripciones (InscripcionID, EstudianteID, CursoID, FechaInscripcion, Estado) VALUES (5002, 1002, 102, '2025-03-12', 'Activo');
+INSERT INTO Inscripciones (InscripcionID, EstudianteID, CursoID, FechaInscripcion, Estado) VALUES (5003, 1003, 101, '2025-03-15', 'Inactivo');
+
+UPDATE Inscripciones SET Estado = 'Completo' WHERE InscripcionID = 5001;
+
+CREATE VIEW VistaCursos AS
+SELECT c.CursoID, c.Titulo, c.Duracion, i.Nombre || ' ' || i.Apellido AS Instructor
+FROM Cursos c
+LEFT JOIN Instructores i ON c.InstructorID = i.InstructorID;
+
+CREATE TRIGGER trg_no_duplicate
+BEFORE INSERT ON Inscripciones
+FOR EACH ROW
+BEGIN
+  SELECT RAISE(ABORT, 'El estudiante ya está inscrito en este curso')
+  WHERE EXISTS(SELECT 1 FROM Inscripciones WHERE EstudianteID = NEW.EstudianteID AND CursoID = NEW.CursoID);
+END;

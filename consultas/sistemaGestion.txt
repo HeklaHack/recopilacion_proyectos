@@ -1,0 +1,359 @@
+-- Proyecto: Sistema de Gestión de Riquezas del Perú
+
+
+-- Eliminación de tablas existentes si existen
+IF OBJECT_ID('dbo.AuditoriaExtracciones') IS NOT NULL
+    DROP TABLE dbo.AuditoriaExtracciones;
+
+IF OBJECT_ID('dbo.ImpactoSocioambiental') IS NOT NULL
+    DROP TABLE dbo.ImpactoSocioambiental;
+
+IF OBJECT_ID('dbo.BeneficiosEconomicos') IS NOT NULL
+    DROP TABLE dbo.BeneficiosEconomicos;
+
+IF OBJECT_ID('dbo.Extracciones') IS NOT NULL
+    DROP TABLE dbo.Extracciones;
+
+IF OBJECT_ID('dbo.PermisosAmbientales') IS NOT NULL
+    DROP TABLE dbo.PermisosAmbientales;
+
+IF OBJECT_ID('dbo.ProyectoComunidad') IS NOT NULL
+    DROP TABLE dbo.ProyectoComunidad;
+
+IF OBJECT_ID('dbo.ComunidadesAfectadas') IS NOT NULL
+    DROP TABLE dbo.ComunidadesAfectadas;
+
+IF OBJECT_ID('dbo.ProyectosExtractivos') IS NOT NULL
+    DROP TABLE dbo.ProyectosExtractivos;
+
+IF OBJECT_ID('dbo.Empresas') IS NOT NULL
+    DROP TABLE dbo.Empresas;
+
+IF OBJECT_ID('dbo.RecursosNaturales') IS NOT NULL
+    DROP TABLE dbo.RecursosNaturales;
+
+IF OBJECT_ID('dbo.Regiones') IS NOT NULL
+    DROP TABLE dbo.Regiones;
+
+IF OBJECT_ID('dbo.VistaProyectosActivos') IS NOT NULL
+    DROP VIEW dbo.VistaProyectosActivos;
+
+IF OBJECT_ID('dbo.VistaMonitoreoAmbiental') IS NOT NULL
+    DROP VIEW dbo.VistaMonitoreoAmbiental;
+
+IF OBJECT_ID('dbo.VistaConflictosSociales') IS NOT NULL
+    DROP VIEW dbo.VistaConflictosSociales;
+
+IF OBJECT_ID('dbo.CalcularExtraccionTotal') IS NOT NULL
+    DROP FUNCTION dbo.CalcularExtraccionTotal;
+
+IF OBJECT_ID('dbo.CalcularBeneficiosRegion') IS NOT NULL
+    DROP FUNCTION dbo.CalcularBeneficiosRegion;
+
+IF OBJECT_ID('dbo.trg_auditar_extracciones') IS NOT NULL
+    DROP TRIGGER dbo.trg_auditar_extracciones;
+
+IF OBJECT_ID('dbo.GenerarInformeProyectoAnual') IS NOT NULL
+    DROP FUNCTION dbo.GenerarInformeProyectoAnual;
+
+-- Creación de la tabla de Regiones
+CREATE TABLE dbo.Regiones (
+    RegionID INT IDENTITY(1,1) PRIMARY KEY,
+    Nombre VARCHAR(100) NOT NULL CONSTRAINT uk_region_nombre UNIQUE,
+    Descripcion TEXT,
+    Superficie DECIMAL(10, 2),
+    Poblacion INTEGER,
+    PBI_Regional DECIMAL(15, 2),
+    FechaCreacion DATE
+);
+
+-- Creación de índice para búsquedas por nombre de región
+CREATE INDEX idx_regiones_nombre ON dbo.Regiones(Nombre);
+
+-- Creación de la tabla de Recursos Naturales
+CREATE TABLE dbo.RecursosNaturales (
+    RecursoID INT IDENTITY(1,1) PRIMARY KEY,
+    Nombre VARCHAR(100) NOT NULL CONSTRAINT uk_recurso_nombre UNIQUE,
+    Tipo VARCHAR(50) NOT NULL,  -- Ejemplo: Metales, Petróleo, Gas, Minerales, etc.
+    Descripcion TEXT,
+    UnidadMedida VARCHAR(50) NOT NULL, -- Toneladas, Barriles, Metros cúbicos, etc.
+    Renovable BIT DEFAULT 0,
+    ImpactoAmbiental VARCHAR(50), -- Alto, Medio, Bajo
+    ValorMercadoActual DECIMAL(15, 2),
+    FechaActualizacionValor DATE
+);
+
+-- Creación de índices para recursos naturales
+CREATE INDEX idx_recursos_tipo ON dbo.RecursosNaturales(Tipo);
+CREATE INDEX idx_recursos_renovable ON dbo.RecursosNaturales(Renovable);
+
+-- Creación de la tabla de Empresas
+CREATE TABLE dbo.Empresas (
+    EmpresaID INT IDENTITY(1,1) PRIMARY KEY,
+    Nombre VARCHAR(150) NOT NULL,
+    RUC VARCHAR(20) UNIQUE NOT NULL CONSTRAINT uk_empresa_ruc UNIQUE,
+    PaisOrigen VARCHAR(100),
+    Ubicacion VARCHAR(100),
+    Contacto VARCHAR(100),
+    SitioWeb VARCHAR(200),
+    AnioFundacion INTEGER,
+    TipoEmpresa VARCHAR(50), -- Nacional, Extranjera, Mixta
+    CertificacionesAmbientales TEXT,
+    HistorialCumplimiento TEXT
+);
+
+-- Creación de índice para empresas
+CREATE INDEX idx_empresas_nombre ON dbo.Empresas(Nombre);
+CREATE INDEX idx_empresas_tipo ON dbo.Empresas(TipoEmpresa);
+
+-- Creación de la tabla de Proyectos Extractivos
+CREATE TABLE dbo.ProyectosExtractivos (
+    ProyectoID INT IDENTITY(1,1) PRIMARY KEY,
+    Nombre VARCHAR(100) NOT NULL CONSTRAINT uk_proyecto_nombre UNIQUE,
+    Descripcion TEXT,
+    RegionID INTEGER NOT NULL,
+    RecursoID INTEGER NOT NULL,
+    EmpresaID INTEGER NOT NULL,
+    FechaInicio DATE,
+    FechaFin DATE,
+    Estado VARCHAR(20) DEFAULT 'Planificación', -- Planificación, Activo, Suspendido, Terminado
+    InversionTotal DECIMAL(15, 2),
+    EmpleoGenerado INTEGER,
+    VolumenEstimado DECIMAL(15, 2),
+    TecnologiaUtilizada TEXT,
+    ImpactoEconomico TEXT,
+    FOREIGN KEY (RegionID) REFERENCES dbo.Regiones(RegionID) ON DELETE RESTRICT,
+    FOREIGN KEY (RecursoID) REFERENCES dbo.RecursosNaturales(RecursoID) ON DELETE RESTRICT,
+    FOREIGN KEY (EmpresaID) REFERENCES dbo.Empresas(EmpresaID) ON DELETE RESTRICT
+);
+
+-- Creación de índices para proyectos
+CREATE INDEX idx_proyectos_region ON dbo.ProyectosExtractivos(RegionID);
+CREATE INDEX idx_proyectos_recurso ON dbo.ProyectosExtractivos(RecursoID);
+CREATE INDEX idx_proyectos_empresa ON dbo.ProyectosExtractivos(EmpresaID);
+CREATE INDEX idx_proyectos_estado ON dbo.ProyectosExtractivos(Estado);
+
+-- Creación de la tabla de Comunidades Afectadas
+CREATE TABLE dbo.ComunidadesAfectadas (
+    ComunidadID INT IDENTITY(1,1) PRIMARY KEY,
+    Nombre VARCHAR(100) NOT NULL,
+    RegionID INTEGER NOT NULL,
+    TipoComunidad VARCHAR(50), -- Indígena, Campesina, Urbana, etc.
+    Poblacion INTEGER,
+    RepresentanteLegal VARCHAR(100),
+    ContactoRepresentante VARCHAR(100),
+    FOREIGN KEY (RegionID) REFERENCES dbo.Regiones(RegionID) ON DELETE RESTRICT
+);
+
+-- Relación muchos a muchos entre Proyectos y Comunidades
+CREATE TABLE dbo.ProyectoComunidad (
+    ProyectoID INTEGER NOT NULL,
+    ComunidadID INTEGER NOT NULL,
+    TipoRelacion VARCHAR(100), -- Área de influencia directa/indirecta
+    AcuerdosCompensacion TEXT,
+    EstadoRelacion VARCHAR(50), -- Conflicto, Acuerdo, Negociación
+    FechaUltimoAcuerdo DATE,
+    PRIMARY KEY (ProyectoID, ComunidadID),
+    FOREIGN KEY (ProyectoID) REFERENCES dbo.ProyectosExtractivos(ProyectoID) ON DELETE CASCADE,
+    FOREIGN KEY (ComunidadID) REFERENCES dbo.ComunidadesAfectadas(ComunidadID) ON DELETE CASCADE
+);
+
+-- Creación de la tabla de Permisos Ambientales
+CREATE TABLE dbo.PermisosAmbientales (
+    PermisoID INT IDENTITY(1,1) PRIMARY KEY,
+    ProyectoID INTEGER NOT NULL,
+    TipoPermiso VARCHAR(100) NOT NULL, -- EIA, PAMA, etc.
+    NumeroResolucion VARCHAR(50) NOT NULL,
+    FechaAprobacion DATE NOT NULL,
+    FechaVencimiento DATE,
+    EntidadEmisora VARCHAR(100) NOT NULL,
+    EstadoPermiso VARCHAR(50) NOT NULL, -- Vigente, Vencido, En trámite
+    ObservacionesIncumplimiento TEXT,
+    DocumentoURL VARCHAR(200),
+    FOREIGN KEY (ProyectoID) REFERENCES dbo.ProyectosExtractivos(ProyectoID) ON DELETE CASCADE
+);
+
+-- Creación de índice para permisos
+CREATE INDEX idx_permisos_proyecto ON dbo.PermisosAmbientales(ProyectoID);
+CREATE INDEX idx_permisos_estado ON dbo.PermisosAmbientales(EstadoPermiso);
+
+-- Creación de la tabla de Extracciones
+CREATE TABLE dbo.Extracciones (
+    ExtraccionID INT IDENTITY(1,1) PRIMARY KEY,
+    ProyectoID INTEGER NOT NULL,
+    Cantidad DECIMAL(15, 2) NOT NULL,  -- Cantidad extraída (en unidades del recurso)
+    FechaExtraccion DATE NOT NULL,
+    Valor DECIMAL(15, 2) NOT NULL,  -- Valor estimado de la extracción
+    PrecioUnidad DECIMAL(15, 2) NOT NULL, -- Precio por unidad al momento de la extracción
+    CostoOperacion DECIMAL(15, 2), -- Costo de la operación de extracción
+    ImpuestosPagados DECIMAL(15, 2), -- Impuestos asociados a esta extracción
+    Canon DECIMAL(15, 2), -- Monto destinado al canon
+    NovedadesOperacion TEXT, -- Observaciones sobre la operación
+    ResponsableTecnico VARCHAR(100),
+    FOREIGN KEY (ProyectoID) REFERENCES dbo.ProyectosExtractivos(ProyectoID) ON DELETE CASCADE
+);
+
+-- Creación de índice para extracciones
+CREATE INDEX idx_extracciones_proyecto ON dbo.Extracciones(ProyectoID);
+CREATE INDEX idx_extracciones_fecha ON dbo.Extracciones(FechaExtraccion);
+
+-- Creación de la tabla de Auditoría de Extracciones
+CREATE TABLE dbo.AuditoriaExtracciones (
+    AuditoriaID INT IDENTITY(1,1) PRIMARY KEY,
+    ExtraccionID INTEGER NOT NULL,
+    FechaRegistro DATETIME NOT NULL DEFAULT GETDATE(),
+    UsuarioRegistro VARCHAR(100) NOT NULL DEFAULT SUSER_SNAME(),
+    AccionRealizada VARCHAR(50) NOT NULL, -- INSERT, UPDATE, DELETE
+    ValorAnterior TEXT,
+    ValorNuevo TEXT,
+    FOREIGN KEY (ExtraccionID) REFERENCES dbo.Extracciones(ExtraccionID) ON DELETE CASCADE
+);
+
+-- Creación de la tabla de Impacto Socioambiental
+CREATE TABLE dbo.ImpactoSocioambiental (
+    ImpactoID INT IDENTITY(1,1) PRIMARY KEY,
+    ProyectoID INTEGER NOT NULL,
+    FechaMonitoreo DATE NOT NULL,
+    TipoImpacto VARCHAR(50) NOT NULL, -- Agua, Aire, Suelo, Biodiversidad, Social
+    IndicadorMedido VARCHAR(100) NOT NULL,
+    ValorMedido DECIMAL(10, 4) NOT NULL,
+    UnidadMedida VARCHAR(20) NOT NULL,
+    LimitePermitido DECIMAL(10, 4),
+    Estado VARCHAR(50), -- Normal, Alerta, Crítico
+    AccionesCorrectivas TEXT,
+    EntidadVerificadora VARCHAR(100),
+    DocumentoEvidencia VARCHAR(200),
+    FOREIGN KEY (ProyectoID) REFERENCES dbo.ProyectosExtractivos(ProyectoID) ON DELETE CASCADE
+);
+
+-- Índices para impacto socioambiental
+CREATE INDEX idx_impacto_proyecto ON dbo.ImpactoSocioambiental(ProyectoID);
+CREATE INDEX idx_impacto_tipo ON dbo.ImpactoSocioambiental(TipoImpacto);
+CREATE INDEX idx_impacto_estado ON dbo.ImpactoSocioambiental(Estado);
+
+-- Creación de la tabla de Beneficios Económicos para las regiones
+CREATE TABLE dbo.BeneficiosEconomicos (
+    BeneficioID INT IDENTITY(1,1) PRIMARY KEY,
+    ProyectoID INTEGER NOT NULL,
+    RegionID INTEGER NOT NULL,
+    AnioFiscal INTEGER NOT NULL,
+    MontoCanon DECIMAL(15, 2) NOT NULL,
+    MontoRegalias DECIMAL(15, 2) NOT NULL,
+    ImpuestosPagados DECIMAL(15, 2) NOT NULL,
+    InversionSocial DECIMAL(15, 2),
+    EmpleoDirecto INTEGER,
+    EmpleoIndirecto INTEGER,
+    ProyectosDesarrollo TEXT,
+    FOREIGN KEY (ProyectoID) REFERENCES dbo.ProyectosExtractivos(ProyectoID) ON DELETE CASCADE,
+    FOREIGN KEY (RegionID) REFERENCES dbo.Regiones(RegionID) ON DELETE RESTRICT
+);
+
+-- Índices para beneficios económicos
+CREATE INDEX idx_beneficios_proyecto ON dbo.BeneficiosEconomicos(ProyectoID);
+CREATE INDEX idx_beneficios_region ON dbo.BeneficiosEconomicos(RegionID);
+CREATE INDEX idx_beneficios_anio ON dbo.BeneficiosEconomicos(AnioFiscal);
+
+-- Vista principal que muestra información de los proyectos activos
+GO
+CREATE VIEW dbo.VistaProyectosActivos AS
+SELECT
+    p.ProyectoID,
+    p.Nombre AS Proyecto,
+    r.Nombre AS Recurso,
+    r.Tipo AS TipoRecurso,
+    rg.Nombre AS Region,
+    e.Nombre AS Empresa,
+    e.PaisOrigen,
+    p.FechaInicio,
+    p.FechaFin,
+    p.Estado,
+    p.InversionTotal,
+    p.EmpleoGenerado,
+    (SELECT COUNT(*) FROM dbo.PermisosAmbientales pa WHERE pa.ProyectoID = p.ProyectoID AND pa.EstadoPermiso = 'Vigente') AS PermisosVigentes,
+    (SELECT COUNT(*) FROM dbo.ComunidadesAfectadas ca JOIN dbo.ProyectoComunidad pc ON ca.ComunidadID = pc.ComunidadID WHERE pc.ProyectoID = p.ProyectoID) AS ComunidadesAfectadas,
+    COALESCE((SELECT SUM(Cantidad) FROM dbo.Extracciones ex WHERE ex.ProyectoID = p.ProyectoID), 0) AS TotalExtraido,
+    COALESCE((SELECT SUM(Valor) FROM dbo.Extracciones ex WHERE ex.ProyectoID = p.ProyectoID), 0) AS ValorTotalExtraido,
+    COALESCE((SELECT SUM(ImpuestosPagados) FROM dbo.Extracciones ex WHERE ex.ProyectoID = p.ProyectoID), 0) AS ImpuestosTotalesPagados
+FROM dbo.ProyectosExtractivos p
+JOIN dbo.RecursosNaturales r ON p.RecursoID = r.RecursoID
+JOIN dbo.Regiones rg ON p.RegionID = rg.RegionID
+JOIN dbo.Empresas e ON p.EmpresaID = e.EmpresaID
+WHERE p.Estado = 'Activo';
+GO
+
+-- Vista para monitoreo ambiental
+GO
+CREATE VIEW dbo.VistaMonitoreoAmbiental AS
+SELECT
+    p.Nombre AS Proyecto,
+    r.Nombre AS Region,
+    i.FechaMonitoreo,
+    i.TipoImpacto,
+    i.IndicadorMedido,
+    i.ValorMedido,
+    i.UnidadMedida,
+    i.LimitePermitido,
+    i.Estado,
+    i.AccionesCorrectivas,
+    i.EntidadVerificadora
+FROM dbo.ImpactoSocioAmbiental i
+JOIN dbo.ProyectosExtractivos p ON i.ProyectoID = p.ProyectoID
+JOIN dbo.Regiones r ON p.RegionID = r.RegionID
+ORDER BY i.Estado DESC, i.FechaMonitoreo DESC;
+GO
+
+-- Vista para conflictos sociales
+GO
+CREATE VIEW dbo.VistaConflictosSociales AS
+SELECT
+    p.Nombre AS Proyecto,
+    e.Nombre AS Empresa,
+    r.Nombre AS Region,
+    c.Nombre AS Comunidad,
+    c.TipoComunidad,
+    pc.TipoRelacion,
+    pc.EstadoRelacion,
+    pc.AcuerdosCompensacion,
+    pc.FechaUltimoAcuerdo
+FROM dbo.ProyectoComunidad pc
+JOIN dbo.ProyectosExtractivos p ON pc.ProyectoID = p.ProyectoID
+JOIN dbo.ComunidadesAfectadas c ON pc.ComunidadID = c.ComunidadID
+JOIN dbo.Regiones r ON c.RegionID = r.RegionID
+JOIN dbo.Empresas e ON p.EmpresaID = e.EmpresaID
+WHERE pc.EstadoRelacion = 'Conflicto'
+ORDER BY r.Nombre, p.Nombre;
+GO
+
+-- Función para calcular el total de extracción por proyecto
+GO
+CREATE FUNCTION dbo.CalcularExtraccionTotal (@proyectoID INT)
+RETURNS TABLE
+AS
+RETURN
+(
+    SELECT
+        COALESCE(SUM(Cantidad), 0) AS TotalExtraido,
+        COALESCE(SUM(Valor), 0) AS ValorTotal,
+        COALESCE(SUM(ImpuestosPagados), 0) AS ImpuestosPagados,
+        MAX(FechaExtraccion) AS UltimaExtraccion
+    FROM dbo.Extracciones
+    WHERE ProyectoID = @proyectoID
+);
+GO
+
+-- Función para calcular los beneficios totales por región
+GO
+CREATE FUNCTION dbo.CalcularBeneficiosRegion (@regionID INT, @anio INT = NULL)
+RETURNS TABLE
+AS
+RETURN
+(
+    SELECT
+        r.Nombre AS Region,
+        COALESCE(SUM(b.MontoCanon), 0) AS TotalCanon,
+        COALESCE(SUM(b.MontoRegalias), 0) AS TotalRegalias,
+        COALESCE(SUM(b.ImpuestosPagados), 0) AS TotalImpuestos,
+        COALESCE(SUM(b.InversionSocial), 0) AS TotalInversionSocial,
+        COALESCE(SUM(b.EmpleoDirecto), 0) AS TotalEmpleoDirecto,
+        COALESCE(SUM(b.EmpleoIndirecto), 0) AS TotalEmpleoIndirecto
+    FROM
