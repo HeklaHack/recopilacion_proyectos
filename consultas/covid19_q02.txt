@@ -1,0 +1,165 @@
+
+-- 1 DATOS BASE: Mostrar registros válidos 
+SELECT * 
+FROM Portfolio_project..CovidDeaths
+WHERE continent IS NOT NULL
+ORDER BY 3, 4;
+
+-- 2 SELECCIÓN DE COLUMNAS ÚTILES
+SELECT location, date, total_cases, new_cases, total_deaths, population
+FROM Portfolio_project..CovidDeaths
+ORDER BY 1, 2;
+
+-- 3 TASA DE MORTALIDAD POR PAÍS
+SELECT location, date, total_cases, total_deaths, 
+    ROUND((total_deaths / total_cases * 100), 2) AS death_rate
+FROM Portfolio_project..CovidDeaths
+WHERE location LIKE '%nigeria%'
+ORDER BY 1, 2;
+
+-- 4 TASA DE INFECCIÓN POR PAÍS 
+SELECT location, date, total_cases, population, 
+    ROUND((total_cases / population * 100), 2) AS infection_rate
+FROM Portfolio_project..CovidDeaths
+WHERE location LIKE '%nigeria%'
+ORDER BY 1, 2;
+
+-- 5 TOP 10 PAÍSES CON MAYOR TASA DE INFECCIÓN
+SELECT TOP (10) location, 
+    MAX(total_cases) AS most_cases, 
+    population, 
+    MAX(ROUND((total_cases / population * 100), 2)) AS infection_rate
+FROM Portfolio_project..CovidDeaths
+GROUP BY location, population
+ORDER BY infection_rate DESC;
+
+-- 6 TOP 10 PAÍSES CON MÁS MUERTES TOTALES Y TASA MÁS ALTA
+SELECT TOP (10) location, 
+    MAX(total_deaths) AS most_deaths, 
+    population, 
+    MAX(ROUND((total_deaths / total_cases * 100), 2)) AS death_rate
+FROM Portfolio_project..CovidDeaths
+WHERE continent IS NOT NULL
+GROUP BY location, population
+ORDER BY most_deaths DESC;
+
+-- 7 TOP 10 PAÍSES CON MÁS MUERTES 
+SELECT TOP (10) location, 
+    MAX(CAST(total_deaths AS INT)) AS most_deaths
+FROM Portfolio_project..CovidDeaths
+WHERE continent IS NOT NULL 
+GROUP BY location
+ORDER BY most_deaths DESC;
+
+-- 8 MAYOR CANTIDAD DE MUERTES POR CONTINENTE
+SELECT location, 
+    MAX(CAST(total_deaths AS INT)) AS most_deaths
+FROM Portfolio_project..CovidDeaths
+WHERE continent IS NULL 
+GROUP BY location
+ORDER BY most_deaths DESC;
+
+-- 9 CIFRAS GLOBALES: Casos, muertes, tasas
+SELECT 
+    SUM(new_cases) AS total_cases, 
+    SUM(CAST(new_deaths AS INT)) AS total_deaths, 
+    ROUND(SUM(CAST(new_deaths AS INT)) * 100.0 / SUM(new_cases), 2) AS death_rate,
+    ROUND(SUM(new_cases) * 100.0 / SUM(population), 4) AS infection_rate
+FROM Portfolio_project..CovidDeaths
+WHERE continent IS NOT NULL;
+
+-- 10 VACUNACIÓN VS POBLACIÓN
+SELECT cd.continent, cd.location, cd.date, cd.population, cv.new_vaccinations, 
+    SUM(CAST(cv.new_vaccinations AS INT)) OVER (PARTITION BY cd.location ORDER BY cd.location, cd.date) AS total_vax
+FROM Portfolio_project..CovidDeaths cd
+JOIN Portfolio_project..CovidVaccinations cv
+    ON cd.location = cv.location AND cd.date = cv.date
+WHERE cv.new_vaccinations IS NOT NULL AND cd.continent IS NOT NULL
+ORDER BY 2, 3;
+
+-- 11 TOP 10 PAÍSES QUE MÁS VACUNAN
+SELECT TOP (10) cd.location, 
+    MAX(CAST(cv.new_vaccinations AS INT)) AS total_vax
+FROM Portfolio_project..CovidDeaths cd
+JOIN Portfolio_project..CovidVaccinations cv
+    ON cd.location = cv.location AND cd.date = cv.date
+WHERE cv.new_vaccinations IS NOT NULL AND cd.continent IS NOT NULL 
+GROUP BY cd.location
+ORDER BY total_vax DESC;
+
+-- 12 CTE: PORCENTAJE DE VACUNACIÓN
+WITH PopvsVac (Continent, Location, Date, Population, New_Vax, Total_Vax) AS (
+    SELECT cd.continent, cd.location, cd.date, cd.population, cv.new_vaccinations, 
+        SUM(CAST(cv.new_vaccinations AS INT)) OVER (PARTITION BY cd.location ORDER BY cd.location, cd.date) AS total_vax
+    FROM Portfolio_project..CovidDeaths cd
+    JOIN Portfolio_project..CovidVaccinations cv
+        ON cd.location = cv.location AND cd.date = cv.date
+    WHERE cv.new_vaccinations IS NOT NULL AND cd.continent IS NOT NULL
+)
+SELECT *, ROUND((Total_Vax / Population) * 100, 3) AS Percent_Vax
+FROM PopvsVac;
+
+-- 13 VISTAS PARA USO EN DASHBOARDS
+
+-- Vista: Porcentaje de vacunación por país
+CREATE VIEW PercentVaxPopulation AS
+SELECT cd.continent, cd.location, cd.date, cd.population, cv.new_vaccinations, 
+    SUM(CAST(cv.new_vaccinations AS INT)) OVER (PARTITION BY cd.location ORDER BY cd.location, cd.date) AS total_vax
+FROM Portfolio_project..CovidDeaths cd
+JOIN Portfolio_project..CovidVaccinations cv
+    ON cd.location = cv.location AND cd.date = cv.date
+WHERE cv.new_vaccinations IS NOT NULL AND cd.continent IS NOT NULL;
+
+-- Vista: Tasa de mortalidad
+CREATE VIEW Death_rate AS
+SELECT location, date, total_cases, total_deaths, 
+    ROUND((total_deaths / total_cases * 100), 2) AS death_rate
+FROM Portfolio_project..CovidDeaths
+WHERE continent IS NOT NULL;
+
+-- Vista: Tasa de infección
+CREATE VIEW Infection_rate AS
+SELECT location, date, total_cases, population, 
+    ROUND((total_cases / population * 100), 2) AS infection_rate
+FROM Portfolio_project..CovidDeaths
+WHERE continent IS NOT NULL;
+
+-- Vista: Países con mayor tasa de infección
+CREATE VIEW Countries_with_high_IR AS
+SELECT location, MAX(total_cases) AS most_cases, population, 
+    MAX(ROUND((total_cases / population * 100), 2)) AS infection_rate
+FROM Portfolio_project..CovidDeaths
+WHERE continent IS NOT NULL
+GROUP BY location, population;
+
+-- Vista: Países con mayor tasa de mortalidad
+CREATE VIEW Countries_with_high_DR AS
+SELECT location, MAX(total_deaths) AS most_deaths, population, 
+    MAX(ROUND((total_deaths / total_cases * 100), 2)) AS death_rate
+FROM Portfolio_project..CovidDeaths
+WHERE continent IS NOT NULL
+GROUP BY location, population;
+
+-- Vista: Cifras globales con vacunas
+CREATE VIEW Global_COVID_Figures AS
+SELECT
+    SUM(cd.new_cases) AS total_cases, 
+    SUM(CAST(cd.new_deaths AS INT)) AS total_deaths, 
+    ROUND(SUM(CAST(cd.new_deaths AS INT)) * 100.0 / SUM(cd.new_cases), 2) AS death_rate,
+    ROUND(SUM(cd.new_cases) * 100.0 / SUM(cd.population), 4) AS infection_rate,
+    SUM(CAST(cv.new_vaccinations AS INT)) AS total_vax
+FROM Portfolio_project..CovidDeaths cd
+JOIN Portfolio_project..CovidVaccinations cv
+    ON cd.location = cv.location AND cd.date = cv.date
+WHERE cv.new_vaccinations IS NOT NULL AND cd.continent IS NOT NULL;
+
+-- Vista: Países que más vacunan
+CREATE VIEW Top_Vaccinating_countries AS
+SELECT cd.location, 
+    MAX(CAST(cv.new_vaccinations AS INT)) AS total_vax
+FROM Portfolio_project..CovidDeaths cd
+JOIN Portfolio_project..CovidVaccinations cv
+    ON cd.location = cv.location AND cd.date = cv.date
+WHERE cv.new_vaccinations IS NOT NULL AND cd.continent IS NOT NULL 
+GROUP BY cd.location;
+
